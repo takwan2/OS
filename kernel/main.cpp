@@ -24,6 +24,11 @@
 #include "usb/xhci/xhci.hpp"
 #include "usb/xhci/trb.hpp"
 
+extern "C" {
+  extern const unsigned char _binary_background_raw_start[];
+  extern const unsigned char _binary_background_raw_end[];
+}
+
 const PixelColor kDesktopBGColor{45, 118, 237};
 const PixelColor kDesktopFGColor{255, 255, 255};
 
@@ -97,6 +102,33 @@ extern "C" void KernelMain(const FrameBufferConfig& frame_buffer_config) {
                 {0, 0},
                 {kFrameWidth, kFrameHeight - 50},
                 kDesktopBGColor);
+
+
+  const unsigned char* raw = _binary_background_raw_start;
+  int img_width = *reinterpret_cast<const uint32_t*>(&raw[0]);
+  int img_height = *reinterpret_cast<const uint32_t*>(&raw[4]);
+  const unsigned char* pixels = &raw[8];
+
+  int offset_x = (kFrameWidth - img_width) / 2;
+  int offset_y = ((kFrameHeight - 50) - img_height) / 2;
+
+  for (int y = 0; y < img_height; ++y) {
+    if (y + offset_y < 0 || y + offset_y >= kFrameHeight - 50) continue;
+
+    for (int x = 0; x < img_width; ++x) {
+      if (x + offset_x < 0 || x + offset_x >= kFrameWidth) continue;
+
+      int i = 4 * (y * img_width + x);
+      unsigned char a = pixels[i + 3];
+
+      // アルファ値が0なら描画しない。透明にする。
+      if (a == 0) continue;
+
+      PixelColor c{pixels[i], pixels[i + 1], pixels[i + 2]};
+      pixel_writer->Write(x + offset_x, y + offset_y, c);
+    }
+  }
+
   FillRectangle(*pixel_writer,
                 {0, kFrameHeight - 50},
                 {kFrameWidth, 50},
